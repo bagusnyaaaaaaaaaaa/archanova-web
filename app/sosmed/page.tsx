@@ -1,65 +1,57 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Share2, Activity, Camera, Video, ThumbsUp, Music, Bookmark, ShieldCheck, Globe, Plus } from 'lucide-react';
+import { ArrowLeft, Share2, Activity, Camera, Video, ThumbsUp, Music, Bookmark, ShieldCheck, Globe, Plus, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+// IMPORT KONEKTOR SUPABASE
+import { supabase } from '@/lib/supabase';
 
-// Data Sosial Media (Desain Bersih, Aksen Warna Brand Hanya di Ikon)
-const sosmedData = [
-  {
-    id: 'instagram',
-    name: 'Instagram',
-    username: '@archanova.official',
-    icon: Camera, 
-    url: 'https://instagram.com',
-    brandHex: '#E1306C', // Pink Instagram
-  },
-  {
-    id: 'youtube',
-    name: 'YouTube',
-    username: 'Archanova Ch',
-    icon: Video, 
-    url: 'https://youtube.com',
-    brandHex: '#FF0000', // Red YouTube
-  },
-  {
-    id: 'facebook',
-    name: 'Facebook',
-    username: 'Archanova Base',
-    icon: ThumbsUp, 
-    url: 'https://facebook.com',
-    brandHex: '#1877F2', // Blue Facebook
-  },
-  {
-    id: 'tiktok',
-    name: 'TikTok',
-    username: '@archanova.vibes',
-    icon: Music, 
-    url: 'https://tiktok.com',
-    brandHex: '#000000', // Black TikTok
-  },
-  {
-    id: 'pinterest',
-    name: 'Pinterest',
-    username: 'Archanova Ideas',
-    icon: Bookmark, 
-    url: 'https://pinterest.com',
-    brandHex: '#E60023', // Red Pinterest
-  }
-];
+interface SosmedItem {
+  id: string;
+  platform: string;
+  username: string;
+  link: string;
+}
 
 export default function SosmedPage() {
+  const [sosmeds, setSosmeds] = useState<SosmedItem[]>([]);
   const [isBooting, setIsBooting] = useState(true);
 
-  // Animasi Loading System awal
+  // ==========================================
+  // FETCH DATA SOSMED DARI SUPABASE
+  // ==========================================
   useEffect(() => {
-    const timer = setTimeout(() => setIsBooting(false), 600);
-    return () => clearTimeout(timer);
+    const fetchSosmedFromCloud = async () => {
+      const { data, error } = await supabase.from('sosmed').select('*');
+      if (data && data.length > 0) {
+        setSosmeds(data);
+      } else {
+        // Data fallback jika database masih kosong
+        setSosmeds([
+          { id: '1', platform: 'Instagram', username: '@archanova.official', link: 'https://instagram.com' },
+          { id: '2', platform: 'YouTube', username: 'Archanova Ch', link: 'https://youtube.com' },
+          { id: '3', platform: 'Facebook', username: 'Archanova Base', link: 'https://facebook.com' },
+          { id: '4', platform: 'TikTok', username: '@archanova.vibes', link: 'https://tiktok.com' },
+          { id: '5', platform: 'Pinterest', username: 'Archanova Ideas', link: 'https://pinterest.com' },
+        ]);
+      }
+      setTimeout(() => setIsBooting(false), 600);
+    };
+
+    fetchSosmedFromCloud();
   }, []);
 
-  // ==========================================
-  // LOADING SCREEN
-  // ==========================================
+  // Helper untuk menentukan Ikon & Warna Berdasarkan Nama Platform
+  const getPlatformDetails = (platformName: string) => {
+    const name = platformName.toLowerCase();
+    if (name.includes('instagram')) return { icon: Camera, brandHex: '#E1306C' };
+    if (name.includes('youtube')) return { icon: Video, brandHex: '#FF0000' };
+    if (name.includes('facebook')) return { icon: ThumbsUp, brandHex: '#1877F2' };
+    if (name.includes('tiktok')) return { icon: Music, brandHex: '#000000' };
+    if (name.includes('pinterest')) return { icon: Bookmark, brandHex: '#E60023' };
+    return { icon: Share2, brandHex: '#cc0000' }; // Default
+  };
+
   if (isBooting) {
     return (
       <div className="w-full min-h-screen bg-[#cc0000] flex flex-col items-center justify-center text-white">
@@ -72,12 +64,9 @@ export default function SosmedPage() {
   }
 
   return (
-    // LOCK SCREEN: 100vh agar pas di satu layar (Tidak perlu scroll body)
     <div className="w-full h-screen bg-[#cc0000] text-gray-900 font-sans relative overflow-hidden z-10 flex flex-col selection:bg-yellow-400 selection:text-red-900">
       
-      {/* ========================================================= */}
-      {/* 1. BACKGROUND ELEMENTS (100% TEMA ARCHNOVA RED) */}
-      {/* ========================================================= */}
+      {/* BACKGROUND ELEMENTS */}
       <div className="absolute top-[-10%] right-[-5%] w-[60%] h-[80%] bg-[#b30000] rounded-bl-[120px] rounded-tl-[40px] transform rotate-[15deg] z-0 pointer-events-none shadow-2xl"></div>
       <div className="absolute top-[-20%] right-[10%] w-[50%] h-[70%] bg-[#990000] rounded-[40%_60%_70%_30%/40%_50%_60%_50%] z-0 pointer-events-none transform rotate-[45deg] opacity-70 blur-xl"></div>
       
@@ -112,15 +101,12 @@ export default function SosmedPage() {
         <div className="absolute top-[42%] text-white font-bold text-[9px] tracking-[0.2em] bg-[#b30000] px-1">WWW</div>
       </div>
 
-      {/* ========================================================= */}
-      {/* 2. KONTEN UTAMA */}
-      {/* ========================================================= */}
+      {/* KONTEN UTAMA */}
       <div className="w-full h-full relative z-20 flex flex-col max-w-[1500px] mx-auto pt-6 px-4 sm:px-6 lg:px-8 pb-6">
         
         {/* HEADER NAVIGATION */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 shrink-0">
           
-          {/* JUDUL UTAMA (Konsep Desain Kunci) */}
           <div className="relative transform -rotate-[4deg] skew-x-[-8deg] ml-4 lg:ml-8 mt-4 z-40 w-max">
             <div className="absolute inset-0 bg-[#a60000] rounded-2xl md:rounded-3xl shadow-[0_15px_30px_rgba(0,0,0,0.5)] border-b-[6px] md:border-b-[10px] border-r-[4px] md:border-r-[6px] border-[#7a0000] z-[-1] scale-[1.05] translate-y-2"></div>
             
@@ -135,7 +121,6 @@ export default function SosmedPage() {
             </div>
           </div>
 
-          {/* KANAN: Tombol Exit */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto mt-4 lg:mt-0 z-20">
             <Link href="/" className="px-6 py-3 bg-[#5a0000] hover:bg-[#3a0000] text-white font-black italic text-xs md:text-sm uppercase tracking-widest transition-colors rounded-full shadow-[0_5px_15px_rgba(100,0,0,0.4)] border-b-[3px] border-[#330000] flex items-center gap-2 shrink-0 hover:-translate-y-1">
               <ArrowLeft size={16} strokeWidth={3} /> EXIT
@@ -143,28 +128,17 @@ export default function SosmedPage() {
           </div>
         </div>
 
-        {/* CONTAINER ISI TENGAH (Membantu Vertikal Center) */}
         <div className="flex-1 w-full flex flex-col justify-center min-h-0 pt-2 px-1">
           
-          {/* ========================================================= */}
-          {/* BANNER CARD UTAMA (BENTUK JAJAR GENJANG JUGA!) */}
-          {/* ========================================================= */}
+          {/* BANNER CARD UTAMA */}
           <div className="w-full max-w-[1400px] mx-auto mb-10 md:mb-14 relative px-2 md:px-4 z-30 animate-fade-in-up">
             <div className="relative transform -skew-x-6 w-full group">
-               
-               {/* Bayangan 3D Merah Gelap */}
                <div className="absolute inset-0 bg-[#7a0000] rounded-3xl translate-y-3 translate-x-2 md:translate-y-4 md:translate-x-3 shadow-[0_20px_40px_rgba(100,0,0,0.6)]"></div>
-               
-               {/* Muka Banner Utama */}
                <div className="relative w-full h-[140px] md:h-[200px] bg-black rounded-3xl overflow-hidden border-[4px] md:border-[6px] border-white flex items-center justify-center">
-                  
-                  {/* Gambar (Dibalik kemiringannya agar normal) */}
                   <img 
                     src="https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?q=80&w=1974&auto=format&fit=crop" 
                     className="absolute inset-0 w-full h-full object-cover opacity-60 transform skew-x-6 scale-110 group-hover:scale-125 transition-transform duration-[1.5s] ease-out" 
                   />
-                  
-                  {/* Teks di dalam Banner */}
                   <div className="relative z-10 w-full px-8 md:px-16 transform skew-x-6 flex flex-col items-start">
                      <div className="bg-[#ffde00] text-[#990000] px-3 py-1 md:px-4 md:py-1.5 rounded-lg text-[10px] md:text-xs font-black italic uppercase tracking-widest shadow-md flex items-center gap-2 mb-2 border-b-[3px] border-[#ccaa00]">
                         <Activity size={16} strokeWidth={3} className="animate-pulse" /> GLOBAL_HUB
@@ -173,54 +147,43 @@ export default function SosmedPage() {
                         STAY CONNECTED.
                      </h2>
                   </div>
-
                </div>
             </div>
           </div>
 
-          {/* ========================================================= */}
-          {/* GRID KARTU SOSMED (MENIRU PERSIS GAYA JUDUL "JEJARING SOSIAL") */}
-          {/* ========================================================= */}
+          {/* GRID KARTU SOSMED BERDASARKAN SUPABASE */}
           <div className="w-full flex items-center justify-center relative pb-6 z-30">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5 lg:gap-8 w-full max-w-[1400px] px-4 mx-auto">
               
-              {sosmedData.map((item, index) => {
-                const Icon = item.icon;
+              {sosmeds.map((item, index) => {
+                const details = getPlatformDetails(item.platform);
+                const Icon = details.icon;
                 return (
                   <a 
                     key={item.id}
-                    href={item.url}
+                    href={item.link || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="relative block group transform -skew-x-6 animate-fade-in-up cursor-pointer"
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                     {/* 3D Drop Shadow (Merah Gelap) */}
                      <div className="absolute inset-0 bg-[#7a0000] rounded-2xl translate-y-2 translate-x-2 transition-transform duration-300 group-hover:translate-y-4 group-hover:translate-x-3 group-active:translate-y-1 group-active:translate-x-1 shadow-xl"></div>
                      
-                     {/* Muka Kartu (Putih) */}
                      <div className="relative bg-white border-[3px] md:border-[4px] border-white rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center transition-transform duration-300 ease-out group-hover:-translate-y-2 group-hover:-translate-x-1 group-active:translate-y-1 group-active:translate-x-1 shadow-md">
-                        
-                        {/* Konten Dibalik Kemiringannya */}
                         <div className="transform skew-x-6 flex flex-col items-center w-full">
-                           
-                           {/* Ikon Brand (Kotak dengan Warna Asli Sosmed) */}
-                           <div className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 flex items-center justify-center rounded-2xl shadow-[0_8px_15px_rgba(0,0,0,0.2)] transform group-hover:scale-110 transition-all duration-300" style={{ backgroundColor: item.brandHex }}>
+                           <div className="w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-4 flex items-center justify-center rounded-2xl shadow-[0_8px_15px_rgba(0,0,0,0.2)] transform group-hover:scale-110 transition-all duration-300" style={{ backgroundColor: details.brandHex }}>
                               <Icon className="w-6 h-6 md:w-8 md:h-8" color="#ffffff" strokeWidth={2.5} />
                            </div>
                            
-                           {/* Nama Platform */}
-                           <h3 className="font-black italic text-sm md:text-lg uppercase tracking-tighter text-[#cc0000] group-hover:text-[#990000] transition-colors leading-none mb-2 md:mb-3">
-                              {item.name}
+                           <h3 className="font-black italic text-sm md:text-lg uppercase tracking-tighter text-[#cc0000] group-hover:text-[#990000] transition-colors leading-none mb-2 md:mb-3 text-center truncate w-full">
+                              {item.platform}
                            </h3>
                            
-                           {/* Username Pill (Kuning, berubah Merah saat Hover) */}
                            <div className="bg-[#ffde00] w-full py-1.5 md:py-2 rounded-lg border-b-[2px] md:border-b-[3px] border-[#ccaa00] flex justify-center items-center shadow-inner group-hover:bg-[#cc0000] group-hover:border-[#990000] transition-colors duration-300">
                               <span className="text-[#990000] group-hover:text-white font-black italic text-[8px] md:text-[10px] uppercase tracking-widest truncate px-2 transition-colors duration-300">
                                  {item.username}
                               </span>
                            </div>
-
                         </div>
                      </div>
                   </a>
@@ -233,17 +196,10 @@ export default function SosmedPage() {
         </div>
       </div>
 
-      {/* KEYFRAMES & UTILS KHUSUS */}
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,900;1,900&display=swap');
         body { font-family: 'Montserrat', sans-serif; }
-
-        /* Hilangkan efek highlight biru di HP saat tombol diklik */
-        a {
-          -webkit-tap-highlight-color: transparent; 
-        }
-
-        /* 3D TEXT SHADOW ARCHNOVA */
+        a { -webkit-tap-highlight-color: transparent; }
         .promo-text-3d {
           text-shadow: 
             1px 1px 0 #7a0000, 2px 2px 0 #7a0000, 3px 3px 0 #7a0000, 4px 4px 0 #7a0000,
@@ -251,10 +207,8 @@ export default function SosmedPage() {
             9px 9px 0 #7a0000, 10px 10px 0 #5c0000, 11px 11px 0 #5c0000, 12px 12px 0 #5c0000,
             13px 13px 25px rgba(0,0,0,0.6);
         }
-
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
-
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(40px) scale(0.95); }
           to { opacity: 1; transform: translateY(0) scale(1); }

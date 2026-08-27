@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Search, Calendar, User, FileText, ArrowLeft, X, CheckSquare, ListTodo, Plus, Check, Image as ImageIcon, Save, Orbit, Terminal, Activity, Hexagon, Crosshair, Globe } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Search, Calendar, User, FileText, ArrowLeft, X, CheckSquare, ListTodo, Plus, Check, Activity, ShieldCheck, Globe } from 'lucide-react';
 import Link from 'next/link';
+// IMPORT KONEKTOR SUPABASE
+import { supabase } from '@/lib/supabase';
 
-// Struktur Data untuk Catatan dan Absensi
+// Struktur Data
 interface AbsensiRecord {
   memberId: string;
   nama: string;
-  status: 'Hadir' | 'Izin' | 'Sakit' | 'Alpa';
+  status: 'Izin' | 'Sakit' | 'Alpa';
 }
 
 interface NoteItem { 
@@ -19,6 +21,7 @@ interface NoteItem {
   gambarPreview: string; 
   isiCatatan: string;
   absen: AbsensiRecord[];
+  updatedAt?: number;
 }
 
 interface Member {
@@ -29,154 +32,79 @@ interface Member {
 
 export default function CatatanPage() {
   const [items, setItems] = useState<NoteItem[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<NoteItem | null>(null);
   
-  // State untuk sub-menu di dalam Modal Detail (Catatan / Absen)
   const [activeTab, setActiveTab] = useState<'catatan' | 'absen'>('catatan');
-
-  // State Form Absensi
   const [selectedMember, setSelectedMember] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<'Hadir' | 'Izin' | 'Sakit' | 'Alpa'>('Hadir');
-
-  // State Form Tambah Catatan Baru
-  const [isAddingNote, setIsAddingNote] = useState(false);
-  const [fileName, setFileName] = useState("");
-  const [formData, setFormData] = useState({
-    judul: '',
-    penulis: '',
-    tanggal: '',
-    isiCatatan: '',
-    gambarPreview: ''
-  });
-
+  const [selectedStatus, setSelectedStatus] = useState<'Izin' | 'Sakit' | 'Alpa'>('Izin');
   const [isBooting, setIsBooting] = useState(true);
 
-  // Animasi Loading System awal
+  // ==========================================
+  // FETCH DATA SUPABASE (CATATAN & ANGGOTA)
+  // ==========================================
   useEffect(() => {
-    const timer = setTimeout(() => setIsBooting(false), 800);
-    return () => clearTimeout(timer);
+    const fetchData = async () => {
+      const { data: catatanData, error: errCatatan } = await supabase.from('catatan').select('*');
+      if (catatanData) {
+        setItems(catatanData.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+      } else if (errCatatan) {
+        console.error("Gagal mengambil data catatan:", errCatatan);
+      }
+
+      const { data: anggotaData } = await supabase.from('anggota').select('*');
+      if (anggotaData) {
+        setMembers(anggotaData);
+      }
+
+      setTimeout(() => setIsBooting(false), 800);
+    };
+
+    fetchData();
   }, []);
 
-  // DATA DUMMY ANGGOTA TIM
-  const members: Member[] = [
-    { id: 'm1', nama: 'Alif Pratama', angkatan: 'Angkatan 1 (2024)' },
-    { id: 'm2', nama: 'Bima Sakti', angkatan: 'Angkatan 1 (2024)' },
-    { id: 'm3', nama: 'Citra Lestari', angkatan: 'Angkatan 1 (2024)' },
-    { id: 'm4', nama: 'Dinda Kirana', angkatan: 'Angkatan 2 (2025)' },
-    { id: 'm5', nama: 'Eko Putra', angkatan: 'Angkatan 2 (2025)' },
-  ];
-  const angkatanList = Array.from(new Set(members.map(m => m.angkatan)));
-
-  // Mengambil data catatan dari Local Storage
-  useEffect(() => {
-    const savedNotes = localStorage.getItem('archanova_list_catatan');
-    if (savedNotes) {
-      setItems(JSON.parse(savedNotes));
-    } else {
-      setItems([{
-        id: 'note-dummy-1',
-        judul: 'Rapat Persiapan Liputan Sekolah',
-        tanggal: '12 Agustus 2026',
-        penulis: 'Bima Sakti',
-        gambarPreview: 'https://images.unsplash.com/photo-1515161318750-781d6122e367?q=80&w=1952&auto=format&fit=crop',
-        isiCatatan: 'Pembahasan mengenai pembagian tugas liputan untuk acara HUT Sekolah minggu depan. \n\n1. Tim Dokumentasi: Standby di panggung utama.\n2. Tim Jurnalis: Mewawancarai Kepala Sekolah dan Ketua Panitia.',
-        absen: [
-          { memberId: 'm1', nama: 'Alif Pratama', status: 'Hadir' }
-        ]
-      }]);
-    }
-  }, []);
+  const angkatanList = useMemo(() => {
+    return Array.from(new Set(members.map(m => m.angkatan).filter(Boolean))).sort();
+  }, [members]);
 
   const filteredItems = items.filter(item => 
     item.judul.toLowerCase().includes(searchQuery.toLowerCase()) || 
     item.penulis.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Kompresi Gambar agar tidak error memory penuh
-  const processImageFile = (file: File, callback: (dataUrl: string) => void) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const maxWidth = 800; 
-        const scale = Math.min(1, maxWidth / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        callback(canvas.toDataURL('image/jpeg', 0.7)); 
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleFileChange = (e: any) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
-      processImageFile(file, (dataUrl) => setFormData({ ...formData, gambarPreview: dataUrl }));
-    }
-  };
-
-  // Fungsi menyimpan Catatan Baru
-  const handleSaveNote = () => {
-    if (!formData.judul || !formData.penulis || !formData.isiCatatan) {
-      alert("Judul, Penulis, dan Isi Catatan wajib diisi!");
-      return;
-    }
-    
-    const newNote: NoteItem = {
-      id: 'note-' + Date.now(),
-      judul: formData.judul,
-      penulis: formData.penulis,
-      tanggal: formData.tanggal || new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
-      isiCatatan: formData.isiCatatan,
-      gambarPreview: formData.gambarPreview || 'https://images.unsplash.com/photo-1517842645767-c639042777db?q=80&w=2070&auto=format&fit=crop',
-      absen: []
-    };
-
-    const updatedItems = [newNote, ...items];
-    try {
-      localStorage.setItem('archanova_list_catatan', JSON.stringify(updatedItems));
-      setItems(updatedItems);
-      setFormData({ judul: '', penulis: '', tanggal: '', isiCatatan: '', gambarPreview: '' });
-      setFileName("");
-      setIsAddingNote(false);
-    } catch (error) {
-      alert("Memori browser penuh! Harap hapus beberapa data lama di panel admin.");
-    }
-  };
-
-  // Fungsi Simulasi Simpan Absensi
-  const handleAddAbsen = () => {
+  // ==========================================
+  // FUNGSI SIMPAN ABSENSI KETIDAKHADIRAN KE SUPABASE
+  // ==========================================
+  const handleAddAbsen = async () => {
     if (!selectedMember || !selectedItem) return;
 
     const memberData = members.find(m => m.id === selectedMember);
     if (!memberData) return;
 
-    if (selectedItem.absen.some(a => a.memberId === selectedMember)) {
-      alert("Anggota ini sudah dicatat absensinya!");
+    const currentAbsen = selectedItem.absen || [];
+
+    if (currentAbsen.some(a => a.memberId === selectedMember)) {
+      alert("Anggota ini sudah tercatat status ketidakhadirannya!");
       return;
     }
 
     const newAbsen: AbsensiRecord = { memberId: memberData.id, nama: memberData.nama, status: selectedStatus };
-    const updatedItem = { ...selectedItem, absen: [...selectedItem.absen, newAbsen] };
+    const updatedAbsenList = [...currentAbsen, newAbsen];
+    const updatedItem = { ...selectedItem, absen: updatedAbsenList };
     
     setSelectedItem(updatedItem);
     const updatedItemsList = items.map(item => item.id === updatedItem.id ? updatedItem : item);
-    
     setItems(updatedItemsList);
-    localStorage.setItem('archanova_list_catatan', JSON.stringify(updatedItemsList)); 
     setSelectedMember("");
+
+    const { error } = await supabase.from('catatan').update({ absen: updatedAbsenList }).eq('id', updatedItem.id);
+    if (error) {
+      alert("Gagal menyimpan data ke server!");
+      console.error(error);
+    }
   };
 
-  // ==========================================
-  // LOADING SCREEN (TEMA MERAH)
-  // ==========================================
   if (isBooting) {
     return (
       <div className="w-full min-h-screen bg-[#cc0000] flex flex-col items-center justify-center text-white">
@@ -189,12 +117,9 @@ export default function CatatanPage() {
   }
 
   return (
-    // LOCK SCREEN: 100vh, tidak ada scroll di body utama
     <div className="w-full h-screen bg-[#cc0000] text-gray-900 font-sans relative overflow-hidden z-10 flex flex-col selection:bg-yellow-400 selection:text-red-900">
       
-      {/* ========================================================= */}
-      {/* 1. BACKGROUND ELEMENTS (100% TEMA ARCHNOVA) */}
-      {/* ========================================================= */}
+      {/* BACKGROUND ELEMENTS */}
       <div className="absolute top-[-10%] right-[-5%] w-[60%] h-[80%] bg-[#b30000] rounded-bl-[120px] rounded-tl-[40px] transform rotate-[15deg] z-0 pointer-events-none shadow-2xl"></div>
       <div className="absolute top-[-20%] right-[10%] w-[50%] h-[70%] bg-[#990000] rounded-[40%_60%_70%_30%/40%_50%_60%_50%] z-0 pointer-events-none transform rotate-[45deg] opacity-70 blur-xl"></div>
       
@@ -219,21 +144,22 @@ export default function CatatanPage() {
         <div className="w-6 h-[5px] bg-white rounded-full"></div>
         <div className="w-2 h-[5px] bg-white rounded-full"></div>
       </div>
+      <div className="absolute top-[8%] right-[25%] flex gap-1.5 transform -rotate-[20deg] z-10 opacity-90">
+        <div className="w-5 h-[5px] bg-white rounded-full"></div>
+        <div className="w-2 h-[5px] bg-white rounded-full"></div>
+      </div>
 
       <div className="absolute top-[42%] right-[3%] z-10 flex flex-col items-center opacity-90 hidden lg:flex">
         <Globe size={64} strokeWidth={1} className="text-white" />
         <div className="absolute top-[42%] text-white font-bold text-[9px] tracking-[0.2em] bg-[#b30000] px-1">WWW</div>
       </div>
 
-      {/* ========================================================= */}
-      {/* 2. KONTEN UTAMA */}
-      {/* ========================================================= */}
+      {/* KONTEN UTAMA */}
       <div className="w-full h-full relative z-20 flex flex-col max-w-[1500px] mx-auto pt-6 px-4 sm:px-6 lg:px-8 pb-6">
         
-        {/* HEADER NAVIGATION (Kapsul & 3D Title) */}
+        {/* HEADER NAVIGATION */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 shrink-0">
           
-          {/* JUDUL 3D MIRING */}
           <div className="relative transform -rotate-[4deg] skew-x-[-8deg] ml-4 lg:ml-8 mt-4 z-40 w-max">
             <div className="absolute inset-0 bg-[#a60000] rounded-2xl md:rounded-3xl shadow-[0_15px_30px_rgba(0,0,0,0.5)] border-b-[6px] md:border-b-[10px] border-r-[4px] md:border-r-[6px] border-[#7a0000] z-[-1] scale-[1.05] translate-y-2"></div>
             
@@ -248,9 +174,8 @@ export default function CatatanPage() {
             </div>
           </div>
 
-          {/* KANAN: Search, New Log, Exit (Bentuk Kapsul) */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto mt-4 lg:mt-0 z-20">
-            <div className="flex-1 lg:w-64 flex items-center bg-white rounded-full px-5 py-3 shadow-[0_5px_15px_rgba(100,0,0,0.3)] transition-all border-2 border-transparent focus-within:border-white/50">
+            <div className="flex-1 lg:w-72 flex items-center bg-white rounded-full px-5 py-3 shadow-[0_5px_15px_rgba(100,0,0,0.3)] transition-all border-2 border-transparent focus-within:border-white/50">
               <Search className="text-[#cc0000] mr-2.5" size={18} strokeWidth={3} />
               <input 
                 type="text" 
@@ -261,24 +186,13 @@ export default function CatatanPage() {
               />
             </div>
 
-            {/* Tombol New Log (Kuning) */}
-            <button 
-              onClick={() => setIsAddingNote(true)}
-              className="px-6 py-3 bg-[#ffde00] hover:bg-white text-[#990000] font-black italic text-xs md:text-sm uppercase tracking-widest transition-all rounded-full shadow-[0_5px_15px_rgba(100,0,0,0.4)] border-b-[3px] border-[#ccaa00] flex items-center gap-2 shrink-0 hover:-translate-y-1"
-            >
-              <Plus size={16} strokeWidth={3} /> NEW LOG
-            </button>
-
-            {/* Tombol Exit (Merah Gelap) */}
             <Link href="/" className="px-6 py-3 bg-[#5a0000] hover:bg-[#3a0000] text-white font-black italic text-xs md:text-sm uppercase tracking-widest transition-colors rounded-full shadow-[0_5px_15px_rgba(100,0,0,0.4)] border-b-[3px] border-[#330000] flex items-center gap-2 shrink-0">
               <ArrowLeft size={16} strokeWidth={3} /> EXIT
             </Link>
           </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* AREA GRID CATATAN (Scroll Internal) */}
-        {/* ========================================================= */}
+        {/* AREA GRID CATATAN */}
         <div className="flex-1 w-full overflow-y-auto hide-scrollbar pb-10">
           {filteredItems.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-4 px-2">
@@ -289,7 +203,6 @@ export default function CatatanPage() {
                   className="bg-white rounded-[1.5rem] overflow-hidden shadow-[0_10px_30px_rgba(100,0,0,0.4)] border-b-[6px] border-r-[4px] border-gray-200 hover:border-gray-300 transition-all hover:-translate-y-2 cursor-pointer group flex flex-col animate-fade-in-up"
                   style={{ animationDelay: `${index * 40}ms` }}
                 >
-                  {/* Thumbnail 16:9 */}
                   <div className="w-full aspect-video bg-gray-100 relative overflow-hidden border-b-2 border-gray-100">
                     <img 
                       src={item.gambarPreview} 
@@ -298,7 +211,6 @@ export default function CatatanPage() {
                     />
                   </div>
 
-                  {/* Info Panel */}
                   <div className="p-5 flex flex-col flex-1 bg-white">
                     <h3 className="font-black italic text-[#cc0000] text-base lg:text-lg uppercase leading-tight line-clamp-2 mb-3">
                       {item.judul}
@@ -319,66 +231,8 @@ export default function CatatanPage() {
           )}
         </div>
 
-        {/* ==================================================== */}
-        {/* MODAL 1: FORM TAMBAH CATATAN BARU (PUTIH ELEGAN) */}
-        {/* ==================================================== */}
-        {isAddingNote && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-10 bg-black/80 backdrop-blur-md animate-fade-in">
-            <div className="bg-white border-b-[8px] border-r-[6px] border-gray-300 rounded-[2rem] overflow-hidden max-w-4xl w-full shadow-[0_20px_60px_rgba(0,0,0,0.8)] relative animate-slide-up flex flex-col max-h-[90vh]">
-              
-              <div className="p-5 md:p-6 border-b border-gray-200 bg-[#cc0000] flex items-center justify-between">
-                <h2 className="text-xl font-black italic text-white uppercase tracking-widest flex items-center gap-2">
-                  <Activity size={20} strokeWidth={3}/> TAMBAH CATATAN BARU
-                </h2>
-                <button onClick={() => setIsAddingNote(false)} className="p-2 text-white hover:bg-[#990000] rounded-full transition-all hover:rotate-90"><X size={20} strokeWidth={3}/></button>
-              </div>
-              
-              <div className="p-6 md:p-8 overflow-y-auto hide-scrollbar flex flex-col gap-5 bg-gray-50">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-[10px] font-black italic text-gray-500 uppercase tracking-widest mb-1.5">Judul Catatan / Rapat</label>
-                    <input type="text" value={formData.judul} onChange={e => setFormData({...formData, judul: e.target.value})} className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-bold focus:outline-none focus:border-[#cc0000] transition-all shadow-sm" placeholder="Contoh: Rapat Evaluasi Mingguan"/>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black italic text-gray-500 uppercase tracking-widest mb-1.5">Nama Penulis</label>
-                    <input type="text" value={formData.penulis} onChange={e => setFormData({...formData, penulis: e.target.value})} className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-bold focus:outline-none focus:border-[#cc0000] transition-all shadow-sm" placeholder="Masukkan nama kamu..."/>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black italic text-gray-500 uppercase tracking-widest mb-1.5">Tanggal (Opsional)</label>
-                  <input type="text" value={formData.tanggal} onChange={e => setFormData({...formData, tanggal: e.target.value})} className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-bold focus:outline-none focus:border-[#cc0000] transition-all shadow-sm" placeholder="Default: Hari ini"/>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black italic text-gray-500 uppercase tracking-widest mb-1.5">Gambar Sampul (Rasio 16:9)</label>
-                  <label className="w-full border-2 border-dashed border-gray-300 rounded-xl bg-white flex flex-col items-center justify-center p-6 hover:border-[#cc0000] hover:bg-red-50 cursor-pointer group transition-all">
-                    <ImageIcon className={`mb-2 ${fileName ? 'text-[#cc0000]' : 'text-gray-400 group-hover:text-[#cc0000]'}`} size={28} strokeWidth={2} />
-                    <p className="text-gray-500 font-bold text-[10px] uppercase tracking-widest">{fileName ? fileName : 'Upload Gambar Preview'}</p>
-                    <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-                  </label>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black italic text-gray-500 uppercase tracking-widest mb-1.5">Isi Catatan / Notulensi</label>
-                  <textarea rows={5} value={formData.isiCatatan} onChange={e => setFormData({...formData, isiCatatan: e.target.value})} className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-medium focus:outline-none focus:border-[#cc0000] hide-scrollbar resize-none shadow-sm transition-all" placeholder="Ketik hasil rapat atau catatan di sini..."></textarea>
-                </div>
-              </div>
-
-              <div className="p-5 border-t border-gray-200 bg-white flex justify-end gap-3 shrink-0">
-                <button onClick={() => setIsAddingNote(false)} className="px-6 py-3 rounded-xl border-2 border-gray-200 text-gray-500 font-black italic text-xs uppercase tracking-widest hover:bg-gray-100 transition-all">BATAL</button>
-                <button onClick={handleSaveNote} className="px-8 py-3 bg-[#cc0000] hover:bg-[#990000] text-white font-black italic text-xs uppercase tracking-widest rounded-xl flex items-center gap-2 transition-all shadow-md transform hover:-translate-y-1">
-                  <Save size={16} strokeWidth={3}/> SIMPAN CATATAN
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ==================================================== */}
-        {/* MODAL 2: DETAIL CATATAN & ABSENSI (PUTIH BERSIH, MERAH) */}
-        {/* ==================================================== */}
-        {selectedItem && !isAddingNote && (
+        {/* MODAL DETAIL CATATAN & ABSENSI KHUSUS IJIN/SAKIT/ALPA */}
+        {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-10 bg-black/80 backdrop-blur-md animate-fade-in">
             <div className="relative w-full max-w-5xl rounded-[2rem] bg-white border-b-[8px] border-r-[6px] border-gray-300 shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col md:flex-row max-h-[90vh] animate-slide-up">
               
@@ -389,9 +243,8 @@ export default function CatatanPage() {
                 <X size={20} strokeWidth={3} />
               </button>
               
-              {/* KIRI: Gambar (16:9 Proporsional) */}
+              {/* KIRI: Gambar */}
               <div className="w-full md:w-5/12 bg-gray-100 flex flex-col border-b md:border-b-0 md:border-r border-gray-200 relative p-6">
-                {/* Aksen Background */}
                 <div className="absolute inset-4 bg-[#cc0000] opacity-10 transform -skew-x-6 rotate-2 rounded-2xl z-0"></div>
                 
                 <div className="w-full aspect-video relative overflow-hidden rounded-2xl border-[4px] border-white shadow-xl z-10">
@@ -414,10 +267,9 @@ export default function CatatanPage() {
                 </div>
               </div>
 
-              {/* KANAN: Tabs & Konten (Putih) */}
+              {/* KANAN: Tabs & Konten */}
               <div className="w-full md:w-7/12 flex flex-col bg-white relative z-10">
                 
-                {/* TABS */}
                 <div className="flex border-b-[3px] border-gray-100 px-6 pt-4 bg-gray-50 shrink-0">
                   <button 
                     onClick={() => setActiveTab('catatan')}
@@ -433,13 +285,12 @@ export default function CatatanPage() {
                       activeTab === 'absen' ? 'border-[#cc0000] text-[#cc0000] bg-white rounded-t-xl' : 'border-transparent text-gray-500 hover:text-[#cc0000]'
                     }`}
                   >
-                    <CheckSquare size={16} strokeWidth={3}/> DATA ABSENSI
+                    <CheckSquare size={16} strokeWidth={3}/> KETIDAKHADIRAN (IZIN/SAKIT/ALPA)
                   </button>
                 </div>
 
                 <div className="p-6 lg:p-8 overflow-y-auto hide-scrollbar flex-1 flex flex-col bg-white">
                   
-                  {/* TAB CATATAN */}
                   {activeTab === 'catatan' && (
                     <div className="animate-fade-in flex-1 flex flex-col min-h-0">
                       <h3 className="text-[11px] font-black italic text-[#ffde00] mb-3 flex items-center gap-2 uppercase tracking-widest bg-[#cc0000] w-max px-3 py-1.5 rounded-lg shadow-sm">
@@ -453,14 +304,13 @@ export default function CatatanPage() {
                     </div>
                   )}
 
-                  {/* TAB ABSENSI */}
                   {activeTab === 'absen' && (
                     <div className="animate-fade-in flex flex-col gap-6 flex-1 min-h-0">
                       
-                      {/* Form Input */}
+                      {/* Form Input khusus Izin, Sakit, Alpa */}
                       <div className="bg-gray-50 p-5 rounded-2xl border-2 border-gray-100 shadow-sm shrink-0">
                         <h3 className="text-[11px] font-black italic text-gray-500 mb-3 flex items-center gap-2 uppercase tracking-widest">
-                          <Plus size={16} strokeWidth={3} className="text-[#cc0000]"/> INPUT DATA KEHADIRAN
+                          <Plus size={16} strokeWidth={3} className="text-[#cc0000]"/> INPUT ANGGOTA TIDAK HADIR
                         </h3>
                         <div className="flex flex-col sm:flex-row gap-3">
                           <select 
@@ -468,7 +318,7 @@ export default function CatatanPage() {
                             onChange={(e) => setSelectedMember(e.target.value)}
                             className="flex-1 bg-white border-2 border-gray-200 text-gray-800 text-xs font-bold rounded-xl px-4 py-3 focus:outline-none focus:border-[#cc0000] transition-all uppercase tracking-wide cursor-pointer"
                           >
-                            <option value="">-- PILIH ANGGOTA --</option>
+                            <option value="">-- PILIH NAMA ANGGOTA --</option>
                             {angkatanList.map((angkatan, idx) => (
                               <optgroup key={idx} label={angkatan} className="text-[#cc0000] font-black bg-gray-50">
                                 {members.filter(m => m.angkatan === angkatan).map(m => (
@@ -483,7 +333,6 @@ export default function CatatanPage() {
                             onChange={(e) => setSelectedStatus(e.target.value as any)}
                             className="w-full sm:w-36 bg-white border-2 border-gray-200 text-gray-800 text-xs font-bold rounded-xl px-4 py-3 focus:outline-none focus:border-[#cc0000] transition-all uppercase tracking-wide cursor-pointer"
                           >
-                            <option value="Hadir">HADIR</option>
                             <option value="Izin">IZIN</option>
                             <option value="Sakit">SAKIT</option>
                             <option value="Alpa">ALPA</option>
@@ -493,24 +342,26 @@ export default function CatatanPage() {
                             onClick={handleAddAbsen}
                             className="bg-[#cc0000] hover:bg-[#990000] text-white font-black italic px-5 py-3 rounded-xl transition-all shadow-[0_4px_10px_rgba(200,0,0,0.3)] flex items-center justify-center shrink-0 hover:-translate-y-1"
                           >
-                            <Check size={18} strokeWidth={3}/> TAMBAH
+                            <Check size={18} strokeWidth={3}/> CATAT
                           </button>
                         </div>
+                        <p className="text-[9px] font-bold text-gray-400 mt-2 uppercase tracking-widest">
+                          *Anggota yang tidak dimasukkan ke daftar ini akan otomatis dianggap <strong>Hadir</strong>.
+                        </p>
                       </div>
 
-                      {/* List Kehadiran */}
+                      {/* List Ketidakhadiran */}
                       <div className="flex-1 flex flex-col min-h-0">
-                        <h3 className="text-[11px] font-black italic text-gray-400 mb-2 uppercase tracking-widest shrink-0">Daftar Kehadiran</h3>
-                        {selectedItem.absen.length > 0 ? (
+                        <h3 className="text-[11px] font-black italic text-gray-400 mb-2 uppercase tracking-widest shrink-0">Daftar Ketidakhadiran</h3>
+                        {(selectedItem.absen || []).length > 0 ? (
                           <div className="grid grid-cols-1 gap-2 overflow-y-auto hide-scrollbar pr-2 pb-4">
-                            {selectedItem.absen.map((absen, idx) => (
+                            {(selectedItem.absen || []).map((absen, idx) => (
                               <div key={idx} className="flex items-center justify-between bg-white p-3.5 rounded-xl border-2 border-gray-100 shadow-sm hover:border-[#cc0000]/30 transition-colors">
                                 <span className="text-xs font-black italic text-gray-800 flex items-center gap-2 uppercase">
                                   <User size={14} className="text-[#cc0000]" strokeWidth={3}/> {absen.nama}
                                 </span>
                                 <span className={`text-[10px] font-black italic px-3 py-1.5 rounded-md uppercase tracking-widest shadow-sm
-                                  ${absen.status === 'Hadir' ? 'bg-green-100 text-green-700 border border-green-300' : 
-                                    absen.status === 'Izin' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+                                  ${absen.status === 'Izin' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
                                     absen.status === 'Sakit' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
                                     'bg-red-100 text-red-700 border border-red-300'}
                                 `}>
@@ -521,7 +372,7 @@ export default function CatatanPage() {
                           </div>
                         ) : (
                           <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex-1">
-                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Belum ada data absensi.</p>
+                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Semua anggota tercatat hadir.</p>
                           </div>
                         )}
                       </div>
